@@ -776,7 +776,7 @@ read_complete_body(Req, Acc) ->
     BodySizeLimit = application:get_env(rabbitmq_management, max_http_body_size, ?MANAGEMENT_DEFAULT_HTTP_MAX_BODY_SIZE),
     read_complete_body(Req, Acc, BodySizeLimit).
 read_complete_body(Req0, Acc, BodySizeLimit) ->
-    case bit_size(Acc) > BodySizeLimit of
+    case byte_size(Acc) > BodySizeLimit of
         true ->
             {error, "Exceeded HTTP request body size limit"};
         false ->
