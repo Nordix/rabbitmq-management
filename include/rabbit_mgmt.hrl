@@ -6,3 +6,5 @@
 %%
 
 -define(AUTH_REALM, "Basic realm=\"RabbitMQ Management\"").
+
+-define(MANAGEMENT_DEFAULT_HTTP_MAX_BODY_SIZE, 10000000).
