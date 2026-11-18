@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [ 'v3.8.9-est' ]
+  pull_request:
+    branches: [ 'v3.8.9-est' ]
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        otp: [ '21.3', '22.2' ]
+
+    env:
+      base_rmq_ref: v3.8.x
+      current_rmq_ref: v3.8.9-est
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build CI image
+        run: |
+          docker build \
+            --build-arg OTP_VERSION="${{ matrix.otp }}" \
+            --tag "rabbitmq-ci:otp-${{ matrix.otp }}" \
+            .
+
+      - name: Run checks
+        run: |
+          docker run --rm \
+            --volume "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" \
+            --workdir "$GITHUB_WORKSPACE" \
+            --hostname rabbitmq-ci \
+            --env base_rmq_ref \
+            --env current_rmq_ref \
+            "rabbitmq-ci:otp-${{ matrix.otp }}" \
+            bash -euo pipefail -c '
+              # No ssh binary in the image; git_rmq uses an SSH push URL.
+              git config --global url."https://github.com/".insteadOf git@github.com:
+              git config --global --add safe.directory "*"
+              make fetch-deps current_rmq_ref="$current_rmq_ref"
+              make xref current_rmq_ref="$current_rmq_ref"
+              epmd -daemon
+              # Scoped for CVE CI: the CVE-2023-46118 regression test plus the
+              # deterministic suites. The integration suites need more CPU than
+              # the free hosted runner provides and are run locally.
+              make ct-rabbit_mgmt_http current_rmq_ref="$current_rmq_ref" \
+                t=all_tests_without_prefix:publish_large_message_exceeding_http_request_body_size_test
+              DETERMINISTIC="cache config_schema listener_config \
+                rabbit_mgmt_stats rabbit_mgmt_test_unit stats"
+              make tests current_rmq_ref="$current_rmq_ref" \
+                CT_SUITES="$DETERMINISTIC"
+            '
+
